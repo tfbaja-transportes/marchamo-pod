@@ -38,6 +38,19 @@
   .estado:disabled{opacity:.55; cursor:default;}
   .estado:focus-visible, .add-foto:focus-visible, .cta:focus-visible{outline:3px solid var(--ambar); outline-offset:2px;}
   .estado .hora{margin-left:auto; font-size:13px; color:var(--ok); font-weight:600;}
+  .btn-inc{width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px;
+    background:#FBF1EF; border:1.5px solid var(--rojo); color:var(--rojo); border-radius:var(--radius);
+    padding:13px 16px; font:inherit; font-weight:600; font-size:16px; cursor:pointer;}
+  .btn-inc:focus-visible{outline:3px solid var(--ambar); outline-offset:2px;}
+  .inc-form{margin-top:10px; background:var(--blanco); border:1px solid var(--linea); border-radius:var(--radius); padding:14px;}
+  .inc-form textarea{width:100%; min-height:84px; border:1px solid var(--linea); border-radius:10px; padding:10px 12px;
+    font:inherit; font-size:16px; resize:vertical; background:var(--crema);}
+  .inc-form textarea:focus{outline:2px solid var(--rojo);}
+  .inc-form .enviar{margin-top:10px; width:100%; border:0; border-radius:10px; background:var(--rojo); color:#fff;
+    font:inherit; font-weight:600; font-size:16px; padding:13px; cursor:pointer;}
+  .inc-form .enviar:disabled{opacity:.6; cursor:default;}
+  .inc-hecha{margin-top:12px; background:#FBF1EF; border:1px solid var(--rojo); color:var(--rojo);
+    border-radius:var(--radius); padding:13px 16px; font-weight:600; font-size:15px; text-align:center;}
   .fotos-caja{background:var(--blanco); border:1px solid var(--linea); border-radius:var(--radius); padding:16px;}
   .fotos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .foto{position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:var(--linea);}
@@ -81,6 +94,11 @@
   <main>
     <h2>¿Dónde va el viaje?</h2>
     <div class="estados" id="estados"></div>
+    <button class="btn-inc" id="btnInc" type="button">&#9888; Reportar incidencia</button>
+    <div class="inc-form" id="incForm" hidden>
+      <textarea id="incTexto" maxlength="500" placeholder="Describe brevemente qué pasó (rechazo, demora, percance...)"></textarea>
+      <button class="enviar" id="incEnviar" type="button">Enviar reporte de incidencia</button>
+    </div>
 
     <h2>Fotos de entrega</h2>
     <div class="fotos-caja">
@@ -160,6 +178,31 @@ ESTADOS.forEach((nombre) => {
     actualizarCTA();
   });
   cont.appendChild(b);
+});
+
+// ---- incidencia ----
+const btnInc = document.getElementById("btnInc");
+const incForm = document.getElementById("incForm");
+btnInc.addEventListener("click", () => {
+  incForm.hidden = !incForm.hidden;
+  if (!incForm.hidden) document.getElementById("incTexto").focus();
+});
+document.getElementById("incEnviar").addEventListener("click", async () => {
+  const texto = document.getElementById("incTexto").value.trim();
+  if (!texto) { avisar("Describe brevemente la incidencia antes de enviar"); return; }
+  const btn = document.getElementById("incEnviar");
+  btn.disabled = true;
+  try {
+    await llamarFlujo({ accion: "estatus", estatus: "Incidencia", comentario: texto });
+    incForm.hidden = true;
+    btnInc.insertAdjacentHTML("afterend",
+      '<div class="inc-hecha">Incidencia reportada \u2014 el equipo de Transportes fue notificado</div>');
+    btnInc.remove();
+    avisar("Incidencia enviada");
+  } catch (e) {
+    avisar(e.message === "Failed to fetch" ? "Sin se\u00f1al \u2014 intenta de nuevo" : e.message);
+    btn.disabled = false;
+  }
 });
 
 // ---- fotos ----
