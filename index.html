@@ -140,6 +140,8 @@ if (!tripKey || !token || !oc) {
 }
 
 const ESTADOS = ["En tránsito", "En destino"];
+const ORDEN = ["Espera de salida de planta", "En tránsito", "En destino", "Entregado"];
+const botones = {};
 let estatusActual = null;
 let fotosSubidas = 0;
 
@@ -167,18 +169,47 @@ ESTADOS.forEach((nombre) => {
     b.disabled = true;
     try {
       await llamarFlujo({ accion: "estatus", estatus: nombre });
-      estatusActual = nombre;
-      document.querySelectorAll(".estado").forEach(x => x.classList.remove("activo"));
-      b.classList.add("activo");
       b.querySelector(".hora").textContent =
         new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+      pintarEstado(nombre);
       avisar(`Estatus enviado: ${nombre}`);
-    } catch (e) { avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message); }
-    b.disabled = false;
+    } catch (e) {
+      avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message);
+      b.disabled = false;
+    }
     actualizarCTA();
   });
+  botones[nombre] = b;
   cont.appendChild(b);
 });
+
+// ---- estado con memoria ----
+function pintarEstado(estatus) {
+  estatusActual = estatus;
+  const cur = ORDEN.indexOf(estatus);
+  for (const [nombre, b] of Object.entries(botones)) {
+    const r = ORDEN.indexOf(nombre);
+    b.classList.toggle("activo", nombre === estatus);
+    b.disabled = cur >= 0 && r <= cur;
+  }
+  if (estatus === "Entregado") {
+    btnEntrega.disabled = true;
+    btnEntrega.textContent = "Entrega confirmada ✓";
+  }
+}
+
+async function cargarEstado() {
+  try {
+    const d = await llamarFlujo({ accion: "consulta" });
+    if (typeof d.fotos === "number" && d.fotos > 0) {
+      fotosSubidas = d.fotos;
+      document.querySelector(".fotos-nota").textContent =
+        `Este viaje ya tiene ${d.fotos} foto${d.fotos > 1 ? "s" : ""} subida${d.fotos > 1 ? "s" : ""}. Puedes agregar más si hace falta.`;
+    }
+    if (d.estatus) pintarEstado(d.estatus);
+    actualizarCTA();
+  } catch (e) { /* sin conexión o sin case consulta: la página opera como antes */ }
+}
 
 // ---- incidencia ----
 const btnInc = document.getElementById("btnInc");
@@ -265,20 +296,21 @@ function aBase64(blob) {
 // ---- entrega ----
 const btnEntrega = document.getElementById("btnEntrega");
 function actualizarCTA() {
-  btnEntrega.disabled = !(fotosSubidas > 0 && estatusActual !== "Entregada");
+  btnEntrega.disabled = !(fotosSubidas > 0 && estatusActual !== "Entregado");
 }
 btnEntrega.addEventListener("click", async () => {
   btnEntrega.disabled = true;
   try {
     await llamarFlujo({ accion: "estatus", estatus: "Entregado" });
-    btnEntrega.textContent = "Entrega confirmada ✓";
-    estatusActual = "Entregada";
+    pintarEstado("Entregado");
     avisar("Entrega confirmada — gracias, buen viaje de regreso");
   } catch (e) {
     avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message);
     btnEntrega.disabled = false;
   }
 });
+
+if (tripKey && token && oc) cargarEstado();
 
 let tt;
 function avisar(msg) {
