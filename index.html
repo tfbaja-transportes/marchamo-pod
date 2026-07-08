@@ -61,6 +61,9 @@
   .add-foto{aspect-ratio:1; border:2px dashed var(--ambar); border-radius:10px; background:#FDF6EA; color:var(--ambar-osc);
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; font:inherit; font-weight:600; font-size:13.5px;}
   .add-foto svg{width:26px; height:26px;}
+  .foto.doc{background:#EDEBE3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;}
+  .foto.doc .icono{font-size:30px; line-height:1;}
+  .foto.doc .nombre-doc{font-size:10.5px; color:var(--gris); max-width:90%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .fotos-nota{font-size:13.5px; color:var(--gris); margin-top:12px;}
   .barra{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px;
     background:linear-gradient(transparent, var(--crema) 30%); padding:18px 20px calc(16px + env(safe-area-inset-bottom));}
@@ -107,9 +110,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           Tomar foto
         </button>
+        <button class="add-foto" id="btnDoc" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Adjuntar PDF
+        </button>
       </div>
-      <p class="fotos-nota">Toma fotos del sello, la mercancía y el sello de recibido. Se necesita al menos 1 foto subida para confirmar la entrega. Si una foto falla, tócala para reintentar.</p>
+      <p class="fotos-nota">Toma fotos del sello, la mercancía y el sello de recibido, o adjunta el PDF de la remisión firmada. Se necesita al menos 1 evidencia subida para confirmar la entrega. Si algo falla, tócalo para reintentar.</p>
       <input type="file" id="inputFoto" accept="image/*" capture="environment" multiple hidden>
+      <input type="file" id="inputDoc" accept="application/pdf,image/*" multiple hidden>
     </div>
   </main>
 
@@ -242,6 +250,23 @@ document.getElementById("inputFoto").addEventListener("change", (e) => {
   [...e.target.files].forEach(prepararFoto);
   e.target.value = "";
 });
+document.getElementById("btnDoc").addEventListener("click", () => document.getElementById("inputDoc").click());
+document.getElementById("inputDoc").addEventListener("change", (e) => {
+  [...e.target.files].forEach((f) => {
+    if (f.type === "application/pdf") prepararDoc(f);
+    else prepararFoto(f); // imagen elegida desde archivos: mismo camino de siempre
+  });
+  e.target.value = "";
+});
+
+function prepararDoc(file) {
+  if (file.size > 10 * 1024 * 1024) { avisar("El PDF supera 10 MB — no se puede subir"); return; }
+  const d = document.createElement("div");
+  d.className = "foto doc";
+  d.innerHTML = `<span class="icono">\u{1F4C4}</span><span class="nombre-doc">${file.name}</span><span class="estado-f">Subiendo…</span>`;
+  document.getElementById("fotosGrid").insertBefore(d, document.getElementById("btnFoto"));
+  subirBlob(d, file, `doc_${Date.now()}.pdf`);
+}
 
 async function prepararFoto(file) {
   const blob = await comprimir(file);
@@ -250,23 +275,24 @@ async function prepararFoto(file) {
   d.className = "foto";
   d.innerHTML = `<img src="${url}" alt="Foto de entrega"><span class="estado-f">Subiendo…</span>`;
   document.getElementById("fotosGrid").insertBefore(d, document.getElementById("btnFoto"));
-  subirFoto(d, blob);
+  subirBlob(d, blob, `pod_${Date.now()}.jpg`);
 }
 
-async function subirFoto(nodo, blob) {
-  nodo.className = "foto";
+async function subirBlob(nodo, blob, nombre) {
+  const esDoc = nodo.classList.contains("doc");
+  nodo.className = esDoc ? "foto doc" : "foto";
   nodo.querySelector(".estado-f").textContent = "Subiendo…";
   try {
     const b64 = await aBase64(blob);
-    await llamarFlujo({ accion: "foto", nombre: `pod_${Date.now()}.jpg`, contenido: b64 });
+    await llamarFlujo({ accion: "foto", nombre: nombre, contenido: b64 });
     fotosSubidas++;
     nodo.classList.add("subida");
     nodo.querySelector(".estado-f").textContent = "Subida ✓";
   } catch (e) {
     nodo.classList.add("error");
     nodo.querySelector(".estado-f").textContent = "Falló — reintentar";
-    nodo.querySelector(".estado-f").onclick = () => subirFoto(nodo, blob);
-    avisar("No se pudo subir la foto. Tócala para reintentar.");
+    nodo.querySelector(".estado-f").onclick = () => subirBlob(nodo, blob, nombre);
+    avisar("No se pudo subir. Tócalo para reintentar.");
   }
   actualizarCTA();
 }
