@@ -277,7 +277,7 @@ async function cargarEstado() {
     if (d.customer) document.getElementById("hCustomer").textContent = d.customer;
     if (d.destino) document.getElementById("hDestino").textContent = d.destino;
     if (d.eco) document.getElementById("hEco").textContent = d.eco;
-    if (d.fechaEntrega) document.getElementById("hFecha").textContent = d.fechaEntrega;
+    if (d.fechaEntrega) document.getElementById("hFecha").textContent = fechaBonita(d.fechaEntrega);
     if (typeof d.fotos === "number" && d.fotos > 0) {
       fotosSubidas = d.fotos;
       document.querySelector(".fotos-nota").textContent =
@@ -286,6 +286,16 @@ async function cargarEstado() {
     if (d.estatus) pintarEstado(d.estatus);
     actualizarCTA();
   } catch (e) { /* sin conexión: la página opera igual */ }
+}
+
+function fechaBonita(iso) {
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso; // formato inesperado: se muestra tal cual
+    const [y, m, d] = iso.split("-").map(Number);
+    const f = new Date(y, m - 1, d);
+    const t = f.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  } catch (e) { return iso; }
 }
 
 // ---- incidencias con catálogo cerrado ----
