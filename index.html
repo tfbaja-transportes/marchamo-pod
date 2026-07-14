@@ -341,7 +341,7 @@ function pintarEstado(estatus) {
   mostrarCerrar();
 }
 
-function esVerdad(v) { return v === true || v === "true" || v === 1 || v === "1"; }
+function esVerdad(v) { return v === true || String(v).trim().toLowerCase() === "true" || String(v) === "1"; }
 
 async function cargarEstado() {
   try {
