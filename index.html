@@ -82,6 +82,23 @@
     font:inherit; font-weight:600; font-size:16px; padding:15px; cursor:pointer;}
   .btn-inc-enviar:disabled{background:#D9A99F; cursor:default;}
 
+  .viaje-cerrado{margin:0 0 16px; background:var(--negro); color:#fff; border-radius:var(--radius);
+    padding:13px 16px; font-weight:600; font-size:15px; text-align:center;}
+  .cerrar-caja{margin-top:28px;}
+  .btn-cerrar{width:100%; border:0; border-radius:var(--radius); background:var(--negro); color:#fff;
+    font:inherit; font-weight:600; font-size:16px; padding:15px; cursor:pointer;}
+  .btn-cerrar:disabled{opacity:.5; cursor:default;}
+  .cerrar-nota{font-size:12.5px; color:var(--gris); margin-top:8px; text-align:center;}
+  .modal-cierre{max-width:340px; padding:22px;}
+  .mc-titulo{font-family:'Barlow Semi Condensed'; font-weight:700; font-size:20px; margin-bottom:8px;}
+  .mc-texto{font-size:14.5px; color:var(--gris); margin-bottom:18px; line-height:1.45;}
+  .mc-botones{display:flex; gap:10px;}
+  .mc-cancelar{flex:1; border:1.5px solid var(--linea); background:#fff; color:var(--carbon); border-radius:10px;
+    padding:12px; font:inherit; font-weight:600; font-size:15px; cursor:pointer;}
+  .mc-confirmar{flex:1; border:0; background:var(--negro); color:#fff; border-radius:10px;
+    padding:12px; font:inherit; font-weight:600; font-size:15px; cursor:pointer;}
+  .mc-confirmar:disabled{opacity:.6; cursor:default;}
+
   .fotos-caja{background:var(--blanco); border:1px solid var(--linea); border-radius:var(--radius); padding:16px;}
   .fotos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .foto{position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:var(--linea);}
@@ -153,6 +170,7 @@
   </div>
 
   <main>
+    <div class="viaje-cerrado" id="bannerCerrado" hidden>&#128274; Viaje cerrado — solo lectura</div>
     <h2>¿Dónde va el viaje?</h2>
     <div class="estados" id="estados"></div>
     <button class="btn-inc" id="btnInc" type="button" disabled>&#9888; Reportar incidencia</button>
@@ -198,6 +216,11 @@
       <input type="file" id="inputFoto" accept="image/*" capture="environment" multiple hidden>
       <input type="file" id="inputDoc" accept="application/pdf,image/*" multiple hidden>
     </div>
+
+    <div class="cerrar-caja" id="cerrarCaja" hidden>
+      <button class="btn-cerrar" id="btnCerrar" type="button">&#128274; Cerrar viaje</button>
+      <p class="cerrar-nota">Una vez cerrado el viaje, ya no se podrá subir evidencia ni modificar estatus.</p>
+    </div>
   </main>
 
   <div class="barra"><button class="cta" id="btnEntrega" disabled>Confirmar entrega</button></div>
@@ -208,6 +231,17 @@
       <button class="modal-cerrar" id="modalCerrar" aria-label="Cerrar">×</button>
       <img id="imgCita" alt="Cita de descarga">
       <div class="msg" id="modalMsg">Cargando imagen…</div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalCierre" hidden>
+    <div class="modal-caja modal-cierre">
+      <div class="mc-titulo">¿Cerrar este viaje?</div>
+      <p class="mc-texto">Una vez cerrado el viaje, ya no se podrá subir evidencia ni modificar estatus. Esta acción no se puede deshacer.</p>
+      <div class="mc-botones">
+        <button class="mc-cancelar" id="btnCancelarCierre" type="button">Cancelar</button>
+        <button class="mc-confirmar" id="btnConfirmarCierre" type="button">Sí, cerrar viaje</button>
+      </div>
     </div>
   </div>
 </div>
@@ -242,6 +276,8 @@ let estatusActual = null;
 let fotosSubidas = 0;
 let incidenciasSubidas = 0;
 let incidenciaTipo = null;
+let incidenciaEnviada = false;
+let viajeCerrado = false;
 let citaImgCache = null;
 
 // ---- comunicación con Power Automate ----
@@ -302,7 +338,10 @@ function pintarEstado(estatus) {
     btnEntrega.disabled = true;
     btnEntrega.textContent = "Entrega confirmada ✓";
   }
+  mostrarCerrar();
 }
+
+function esVerdad(v) { return v === true || v === "true" || v === 1 || v === "1"; }
 
 async function cargarEstado() {
   try {
@@ -311,12 +350,24 @@ async function cargarEstado() {
     if (d.destino) document.getElementById("hDestino").textContent = d.destino;
     if (d.eco) document.getElementById("hEco").textContent = d.eco;
     if (d.fechaEntrega) document.getElementById("hFecha").textContent = fechaBonita(d.fechaEntrega);
-    if (typeof d.fotos === "number" && d.fotos > 0) {
-      fotosSubidas = d.fotos;
+    const nFotos = parseInt(d.fotos, 10) || 0;
+    if (nFotos > 0) {
+      fotosSubidas = nFotos;
       document.querySelector(".fotos-nota").textContent =
-        `Este viaje ya tiene ${d.fotos} evidencia${d.fotos > 1 ? "s" : ""} subida${d.fotos > 1 ? "s" : ""}. Puedes agregar más si hace falta.`;
+        `Este viaje ya tiene ${nFotos} evidencia${nFotos > 1 ? "s" : ""} subida${nFotos > 1 ? "s" : ""}. Puedes agregar más si hace falta.`;
     }
-    if (d.estatus) pintarEstado(d.estatus);
+    if (d.estatus) pintarEstado((d.estatus + "").trim());
+    if (esVerdad(d.incidencia)) {
+      incidenciaEnviada = true;
+      const bi = document.getElementById("btnInc");
+      if (bi && !document.querySelector(".inc-hecha")) {
+        bi.insertAdjacentHTML("afterend",
+          `<div class="inc-hecha">Incidencia reportada: ${d.comentario || "ver detalle"}</div>`);
+        bi.remove();
+      }
+    }
+    if (esVerdad(d.cerrado)) aplicarCierre();
+    mostrarCerrar();
     actualizarCTA();
   } catch (e) { /* sin conexión: la página opera igual */ }
 }
@@ -384,6 +435,7 @@ document.getElementById("btnIncEnviar").addEventListener("click", async () => {
   btn.textContent = "Enviando…";
   try {
     await llamarFlujo({ accion: "estatus", estatus: "Incidencia", comentario: incidenciaTipo });
+    incidenciaEnviada = true;
     document.getElementById("incEvi").hidden = true;
     if (btnInc) {
       btnInc.insertAdjacentHTML("afterend",
@@ -391,6 +443,7 @@ document.getElementById("btnIncEnviar").addEventListener("click", async () => {
       btnInc.remove();
     }
     avisar("Incidencia enviada — el equipo de Transportes fue notificado");
+    mostrarCerrar();
   } catch (e) {
     avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message);
     btn.disabled = false;
@@ -514,9 +567,54 @@ function aBase64(blob) {
   });
 }
 
+// ---- cierre de viaje ----
+function mostrarCerrar() {
+  const caja = document.getElementById("cerrarCaja");
+  caja.hidden = viajeCerrado || !(estatusActual === "Entregado" || incidenciaEnviada);
+}
+
+function aplicarCierre() {
+  viajeCerrado = true;
+  document.getElementById("bannerCerrado").hidden = false;
+  document.getElementById("cerrarCaja").hidden = true;
+  Object.values(botones).forEach((b) => b.disabled = true);
+  const bi = document.getElementById("btnInc");
+  if (bi) bi.disabled = true;
+  document.getElementById("incForm").hidden = true;
+  document.getElementById("incEvi").hidden = true;
+  ["btnFoto", "btnDoc", "btnIncFoto", "btnIncDoc"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = true;
+  });
+  btnEntrega.disabled = true;
+  btnEntrega.textContent = "Viaje cerrado 🔒";
+}
+
+const modalCierre = document.getElementById("modalCierre");
+document.getElementById("btnCerrar").addEventListener("click", () => modalCierre.hidden = false);
+document.getElementById("btnCancelarCierre").addEventListener("click", () => modalCierre.hidden = true);
+modalCierre.addEventListener("click", (e) => { if (e.target === modalCierre) modalCierre.hidden = true; });
+
+document.getElementById("btnConfirmarCierre").addEventListener("click", async () => {
+  const b = document.getElementById("btnConfirmarCierre");
+  b.disabled = true;
+  b.textContent = "Cerrando…";
+  try {
+    await llamarFlujo({ accion: "cerrar" });
+    modalCierre.hidden = true;
+    aplicarCierre();
+    avisar("Viaje cerrado — gracias, buen viaje de regreso");
+  } catch (e) {
+    avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message);
+  }
+  b.disabled = false;
+  b.textContent = "Sí, cerrar viaje";
+});
+
 // ---- entrega ----
 const btnEntrega = document.getElementById("btnEntrega");
 function actualizarCTA() {
+  if (viajeCerrado) { btnEntrega.disabled = true; return; }
   if (estatusActual === "Entregado") { btnEntrega.disabled = true; return; }
   const listo = fotosSubidas > 0 && estatusActual === "En destino";
   btnEntrega.disabled = !listo;
