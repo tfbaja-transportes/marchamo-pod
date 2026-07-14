@@ -441,7 +441,7 @@ async function verCita() {
 // ---- fotos y documentos ----
 document.getElementById("btnFoto").addEventListener("click", () => document.getElementById("inputFoto").click());
 document.getElementById("inputFoto").addEventListener("change", (e) => {
-  [...e.target.files].forEach(prepararFoto);
+  [...e.target.files].forEach((f) => prepararFoto(f));
   e.target.value = "";
 });
 document.getElementById("btnDoc").addEventListener("click", () => document.getElementById("inputDoc").click());
