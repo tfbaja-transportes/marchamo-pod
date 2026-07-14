@@ -327,11 +327,11 @@ function pintarEstado(estatus) {
   for (const [nombre, b] of Object.entries(botones)) {
     const r = ORDEN.indexOf(nombre);
     b.classList.toggle("activo", nombre === estatus);
-    b.disabled = cur >= 0 && r <= cur;
+    b.disabled = viajeCerrado || (cur >= 0 && r <= cur);
   }
   const bi = document.getElementById("btnInc");
   if (bi) {
-    bi.disabled = !INCIDENCIAS[estatus];
+    bi.disabled = viajeCerrado || !INCIDENCIAS[estatus];
     if (bi.disabled) document.getElementById("incForm").hidden = true;
   }
   if (estatus === "Entregado") {
@@ -366,9 +366,9 @@ async function cargarEstado() {
         bi.remove();
       }
     }
-    if (esVerdad(d.cerrado)) aplicarCierre();
     mostrarCerrar();
     actualizarCTA();
+    if (esVerdad(d.cerrado)) aplicarCierre();
   } catch (e) { /* sin conexión: la página opera igual */ }
 }
 
