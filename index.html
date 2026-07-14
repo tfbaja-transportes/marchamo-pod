@@ -72,6 +72,16 @@
   .inc-hecha{margin-top:12px; background:#FBF1EF; border:1px solid var(--rojo); color:var(--rojo);
     border-radius:var(--radius); padding:13px 16px; font-weight:600; font-size:15px; text-align:center;}
 
+  .inc-evi{margin-top:12px; background:#FBF1EF; border:1.5px solid var(--rojo); border-radius:var(--radius); padding:16px;}
+  .inc-evi-cab{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:4px;}
+  .inc-evi-titulo{font-family:'Barlow Semi Condensed'; font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--rojo);}
+  .inc-evi-tipo{font-size:13px; font-weight:600; color:var(--rojo); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:55%;}
+  .inc-evi-nota{font-size:13.5px; color:var(--rojo); margin-bottom:12px;}
+  .inc-add{border-color:var(--rojo); background:#fff; color:var(--rojo);}
+  .btn-inc-enviar{width:100%; margin-top:14px; border:0; border-radius:var(--radius); background:var(--rojo); color:#fff;
+    font:inherit; font-weight:600; font-size:16px; padding:15px; cursor:pointer;}
+  .btn-inc-enviar:disabled{background:#D9A99F; cursor:default;}
+
   .fotos-caja{background:var(--blanco); border:1px solid var(--linea); border-radius:var(--radius); padding:16px;}
   .fotos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
   .foto{position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:var(--linea);}
@@ -151,6 +161,27 @@
       <div class="inc-ops" id="incOps"></div>
     </div>
 
+    <div class="inc-evi" id="incEvi" hidden>
+      <div class="inc-evi-cab">
+        <div class="inc-evi-titulo">Evidencia de la incidencia</div>
+        <div class="inc-evi-tipo" id="incEviTipo">—</div>
+      </div>
+      <p class="inc-evi-nota" id="incEviNota">Sube al menos 1 evidencia (foto o PDF) para poder enviar el reporte de la incidencia.</p>
+      <div class="fotos-grid" id="incGrid">
+        <button class="add-foto inc-add" id="btnIncFoto" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Tomar foto
+        </button>
+        <button class="add-foto inc-add" id="btnIncDoc" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Adjuntar PDF
+        </button>
+      </div>
+      <input type="file" id="inputIncFoto" accept="image/*" capture="environment" multiple hidden>
+      <input type="file" id="inputIncDoc" accept="application/pdf,image/*" multiple hidden>
+      <button class="btn-inc-enviar" id="btnIncEnviar" type="button" disabled>Enviar reporte de incidencia</button>
+    </div>
+
     <h2>Fotos de entrega</h2>
     <div class="fotos-caja">
       <div class="fotos-grid" id="fotosGrid">
@@ -209,6 +240,8 @@ const INCIDENCIAS = {
 const botones = {};
 let estatusActual = null;
 let fotosSubidas = 0;
+let incidenciasSubidas = 0;
+let incidenciaTipo = null;
 let citaImgCache = null;
 
 // ---- comunicación con Power Automate ----
@@ -315,25 +348,70 @@ function construirOpciones() {
     const b = document.createElement("button");
     b.className = "inc-op"; b.type = "button";
     b.textContent = texto;
-    b.addEventListener("click", () => enviarIncidencia(texto));
+    b.addEventListener("click", () => elegirIncidencia(texto));
     caja.appendChild(b);
   });
 }
 
-async function enviarIncidencia(texto) {
-  document.querySelectorAll(".inc-op").forEach(x => x.disabled = true);
+// Elegir el tipo NO envía el reporte todavía: abre la sección de evidencia.
+function elegirIncidencia(texto) {
+  incidenciaTipo = texto;
+  incForm.hidden = true;
+  const evi = document.getElementById("incEvi");
+  document.getElementById("incEviTipo").textContent = texto;
+  evi.hidden = false;
+  actualizarIncidencia();
+  evi.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function actualizarIncidencia() {
+  const nota = document.getElementById("incEviNota");
+  const btn = document.getElementById("btnIncEnviar");
+  if (incidenciasSubidas > 0) {
+    btn.disabled = false;
+    nota.textContent = `${incidenciasSubidas} evidencia${incidenciasSubidas > 1 ? "s" : ""} subida${incidenciasSubidas > 1 ? "s" : ""}. Ya puedes enviar el reporte.`;
+  } else {
+    btn.disabled = true;
+    nota.textContent = "Sube al menos 1 evidencia (foto o PDF) para poder enviar el reporte de la incidencia.";
+  }
+}
+
+// El reporte (y el correo) se envía SOLO al confirmar, con evidencia ya subida.
+document.getElementById("btnIncEnviar").addEventListener("click", async () => {
+  if (incidenciasSubidas === 0 || !incidenciaTipo) return;
+  const btn = document.getElementById("btnIncEnviar");
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
   try {
-    await llamarFlujo({ accion: "estatus", estatus: "Incidencia", comentario: texto });
-    incForm.hidden = true;
-    btnInc.insertAdjacentHTML("afterend",
-      `<div class="inc-hecha">Incidencia reportada: ${texto}</div>`);
-    btnInc.remove();
+    await llamarFlujo({ accion: "estatus", estatus: "Incidencia", comentario: incidenciaTipo });
+    document.getElementById("incEvi").hidden = true;
+    if (btnInc) {
+      btnInc.insertAdjacentHTML("afterend",
+        `<div class="inc-hecha">Incidencia reportada: ${incidenciaTipo}</div>`);
+      btnInc.remove();
+    }
     avisar("Incidencia enviada — el equipo de Transportes fue notificado");
   } catch (e) {
     avisar(e.message === "Failed to fetch" ? "Sin señal — intenta de nuevo" : e.message);
-    document.querySelectorAll(".inc-op").forEach(x => x.disabled = false);
+    btn.disabled = false;
+    btn.textContent = "Enviar reporte de incidencia";
   }
-}
+});
+
+// ---- subida de evidencia de incidencia ----
+document.getElementById("btnIncFoto").addEventListener("click", () => document.getElementById("inputIncFoto").click());
+document.getElementById("inputIncFoto").addEventListener("change", (e) => {
+  [...e.target.files].forEach((f) => prepararFoto(f, "incidencia", "incGrid", "btnIncFoto"));
+  e.target.value = "";
+});
+document.getElementById("btnIncDoc").addEventListener("click", () => document.getElementById("inputIncDoc").click());
+document.getElementById("inputIncDoc").addEventListener("change", (e) => {
+  [...e.target.files].forEach((f) => {
+    if (f.type === "application/pdf") prepararDoc(f, "incidencia", "incGrid", "btnIncFoto");
+    else prepararFoto(f, "incidencia", "incGrid", "btnIncFoto");
+  });
+  e.target.value = "";
+});
 
 // ---- imagen de la cita ----
 const modal = document.getElementById("modalCita");
@@ -375,42 +453,44 @@ document.getElementById("inputDoc").addEventListener("change", (e) => {
   e.target.value = "";
 });
 
-function prepararDoc(file) {
+function prepararDoc(file, tipo = "entrega", grid = "fotosGrid", btnRef = "btnFoto") {
   if (file.size > 10 * 1024 * 1024) { avisar("El PDF supera 10 MB — no se puede subir"); return; }
   const d = document.createElement("div");
   d.className = "foto doc";
   d.innerHTML = `<span class="icono">\u{1F4C4}</span><span class="nombre-doc">${file.name}</span><span class="estado-f">Subiendo…</span>`;
-  document.getElementById("fotosGrid").insertBefore(d, document.getElementById("btnFoto"));
-  subirBlob(d, file, `doc_${Date.now()}.pdf`);
+  document.getElementById(grid).insertBefore(d, document.getElementById(btnRef));
+  const pre = tipo === "incidencia" ? "inc" : "doc";
+  subirBlob(d, file, `${pre}_${Date.now()}.pdf`, tipo);
 }
 
-async function prepararFoto(file) {
+async function prepararFoto(file, tipo = "entrega", grid = "fotosGrid", btnRef = "btnFoto") {
   const blob = await comprimir(file);
   const url = URL.createObjectURL(blob);
   const d = document.createElement("div");
   d.className = "foto";
-  d.innerHTML = `<img src="${url}" alt="Foto de entrega"><span class="estado-f">Subiendo…</span>`;
-  document.getElementById("fotosGrid").insertBefore(d, document.getElementById("btnFoto"));
-  subirBlob(d, blob, `pod_${Date.now()}.jpg`);
+  d.innerHTML = `<img src="${url}" alt="Evidencia"><span class="estado-f">Subiendo…</span>`;
+  document.getElementById(grid).insertBefore(d, document.getElementById(btnRef));
+  const pre = tipo === "incidencia" ? "inc" : "pod";
+  subirBlob(d, blob, `${pre}_${Date.now()}.jpg`, tipo);
 }
 
-async function subirBlob(nodo, blob, nombre) {
+async function subirBlob(nodo, blob, nombre, tipo = "entrega") {
   const esDoc = nodo.classList.contains("doc");
   nodo.className = esDoc ? "foto doc" : "foto";
   nodo.querySelector(".estado-f").textContent = "Subiendo…";
   try {
     const b64 = await aBase64(blob);
-    await llamarFlujo({ accion: "foto", nombre: nombre, contenido: b64 });
-    fotosSubidas++;
+    await llamarFlujo({ accion: "foto", nombre: nombre, contenido: b64, tipo: tipo });
+    if (tipo === "incidencia") { incidenciasSubidas++; } else { fotosSubidas++; }
     nodo.classList.add("subida");
     nodo.querySelector(".estado-f").textContent = "Subida ✓";
   } catch (e) {
     nodo.classList.add("error");
     nodo.querySelector(".estado-f").textContent = "Falló — reintentar";
-    nodo.querySelector(".estado-f").onclick = () => subirBlob(nodo, blob, nombre);
+    nodo.querySelector(".estado-f").onclick = () => subirBlob(nodo, blob, nombre, tipo);
     avisar("No se pudo subir. Tócalo para reintentar.");
   }
-  actualizarCTA();
+  if (tipo === "incidencia") { actualizarIncidencia(); } else { actualizarCTA(); }
 }
 
 async function comprimir(file) {
@@ -437,7 +517,16 @@ function aBase64(blob) {
 // ---- entrega ----
 const btnEntrega = document.getElementById("btnEntrega");
 function actualizarCTA() {
-  btnEntrega.disabled = !(fotosSubidas > 0 && estatusActual !== "Entregado");
+  if (estatusActual === "Entregado") { btnEntrega.disabled = true; return; }
+  const listo = fotosSubidas > 0 && estatusActual === "En destino";
+  btnEntrega.disabled = !listo;
+  if (estatusActual !== "En destino") {
+    btnEntrega.title = "Marca 'En destino' antes de confirmar la entrega";
+  } else if (fotosSubidas === 0) {
+    btnEntrega.title = "Sube al menos una evidencia de entrega";
+  } else {
+    btnEntrega.title = "";
+  }
 }
 btnEntrega.addEventListener("click", async () => {
   btnEntrega.disabled = true;
