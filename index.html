@@ -440,6 +440,8 @@ async function cargarEstado() {
       document.querySelector(".fotos-nota").textContent =
         `Este viaje ya tiene ${nFotos} evidencia${nFotos > 1 ? "s" : ""} subida${nFotos > 1 ? "s" : ""}. Puedes agregar más si hace falta.`;
     }
+    // Zona horaria del CEDIS: opcional por viaje; sin ella se usa la hora del centro
+    if (d.zonaCedis && String(d.zonaCedis).trim()) fijarZona(String(d.zonaCedis).trim());
     // El ingreso a CEDIS se lee antes de pintar el estatus, porque pintarEstado lo usa
     if (d.horaLlegada && String(d.horaLlegada).trim()) {
       ingRegistrado = true;
@@ -708,8 +710,24 @@ const relojBtns = [...document.querySelectorAll(".reloj-btn")];
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const pisoAhora = () => Math.floor(Date.now() / PASO_MS) * PASO_MS;   // minuto actual, sin segundos: nunca adelanta
-const horaDe  = (ms) => { const d = new Date(ms); return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); };
-const fechaDe = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+// La hora se muestra y se guarda en la zona del CEDIS, no en la del celular:
+// así despacho puede registrar desde Mexicali y la hora coincide con la del pase.
+const ZONA_DEFECTO = "America/Mexico_City";   // CEDIS nacionales: hora del centro
+let zonaCedis = ZONA_DEFECTO;
+function fijarZona(z) {
+  try { new Intl.DateTimeFormat("es-MX", { timeZone: z }); zonaCedis = z; }
+  catch (e) { zonaCedis = ZONA_DEFECTO; }      // zona inválida desde la lista → hora del centro
+}
+function partes(ms) {
+  const o = {};
+  new Intl.DateTimeFormat("en-CA", { timeZone: zonaCedis, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(ms)).forEach((x) => { o[x.type] = x.value; });
+  if (o.hour === "24") o.hour = "00";
+  return o;
+}
+const horaDe  = (ms) => { const o = partes(ms); return o.hour + ":" + o.minute; };
+const fechaDe = (ms) => { const o = partes(ms); return o.year + "-" + o.month + "-" + o.day; };
 const esHoy   = (ms) => fechaDe(ms) === fechaDe(Date.now());
 
 function relojPintar() {
@@ -717,10 +735,10 @@ function relojPintar() {
   document.getElementById("relojV").textContent = horaDe(relojMs);
   const dia = document.getElementById("relojDia");
   if (esHoy(relojMs)) {
-    dia.textContent = "Hoy";
+    dia.textContent = "Hoy · hora del CEDIS";
     dia.classList.remove("ayer");
   } else {
-    dia.textContent = "Ayer, " + new Date(relojMs).toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+    dia.textContent = "Ayer, " + new Date(relojMs).toLocaleDateString("es-MX", { timeZone: zonaCedis, day: "numeric", month: "long" }) + " · hora del CEDIS";
     dia.classList.add("ayer");
   }
   // El tope avanza con la hora real: nunca se puede registrar una hora futura
